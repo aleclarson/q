@@ -1,0 +1,45 @@
+{
+  "name": "q",
+  "version": "1.0.0",
+  "description": "Promises for Javascript",
+  "homepage": "https://github.com/aleclarson/q",
+  "author": "Alec Larson (https://github.com/aleclarson)",
+  "keywords": [
+    "q",
+    "promise",
+    "promises",
+    "promises-a",
+    "promises-aplus",
+    "deferred",
+    "future",
+    "async",
+    "flow control",
+    "fluent",
+    "browser",
+    "node"
+  ],
+  "contributors": [
+    "Alec Larson (https://github.com/aleclarson)"
+  ],
+  "license": {
+    "type": "MIT"
+  },
+  "main": "q.js",
+  "files": [
+    "LICENSE",
+    "q.js",
+    "queue.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/aleclarson/q.git"
+  },
+  "dependencies": {
+    "is-node-env": "aleclarson/is-node-env#1.0.0",
+    "lotus-require": "aleclarson/lotus-require#1.0.0",
+    "no-op": "^1.0.3",
+    "parse-bool": "aleclarson/parse-bool#0.0.1",
+    "stack": "aleclarson/stack#1.0.0",
+    "temp-log": "aleclarson/temp-log#1.0.0"
+  }
+}
