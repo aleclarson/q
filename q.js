@@ -8,14 +8,10 @@
 
 require("lotus-require");
 
+var parseErrorStack = require("parseErrorStack");
 var isNodeEnv = require("is-node-env");
 var noop = require("no-op");
 var log = require("temp-log");
-
-// TODO: Make `Stack` parse `error.stack` if not in NodeJS
-if (isNodeEnv) {
-  var Stack = require("stack");
-}
 
 // Use the fastest possible means to execute a task in a future turn
 // of the event loop.
@@ -339,19 +335,7 @@ function _init(promise, createdWith) {
 
   promise.error = undefined;
 
-  if (isNodeEnv) {
-    var stack = Stack({
-      skip: 2 // Skip the `Stack` and `_init` frames.
-    });
-
-    promise.stack = stack.frames;
-
-    Object.defineProperty(promise, "_stack", {
-      get: function () {
-        return stack;
-      }
-    });
-  }
+  promise.stack = parseErrorStack(Error());
 
   if (Q.cache != null) {
     Q.cache[promise.id] = promise;
@@ -361,6 +345,9 @@ function _init(promise, createdWith) {
 function _reject(error, promise) {
 
   if (!Q.debug) {
+    if (!error.promise) {
+      error.promise = promise;
+    }
     return;
   }
 
@@ -759,6 +746,8 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
   deferred = defer();
 
   var promise = deferred.promise._createdWith("promise.then");
+
+  promise.stack = parseErrorStack(Error());
 
   var previous = this;
 
