@@ -449,6 +449,8 @@ function defer() {
 
   _init(promise, "Q.defer");
 
+  promise.stack = parseErrorStack(Error());
+
   promise.promiseDispatch = function (resolve, op, operands) {
     var args = array_slice(arguments);
     if (messages) {
@@ -541,6 +543,7 @@ function defer() {
 
   deferred.reject = function (error) {
     if (resolvedPromise) { return; }
+    error.promise = promise;
     var newPromise = reject(error)._createdBy("deferred.reject");
     become(newPromise);
   };
@@ -748,6 +751,10 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
   var promise = deferred.promise._createdWith("promise.then");
 
   promise.stack = parseErrorStack(Error());
+
+  if (typeof this.abort === 'function') {
+    promise.abort = this.abort;
+  }
 
   var previous = this;
 
