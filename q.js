@@ -9,8 +9,7 @@
 require("lotus-require");
 
 var parseErrorStack = require("parseErrorStack");
-var isNodeEnv = require("is-node-env");
-var noop = require("no-op");
+var isNodeJS = require("isNodeJS");
 var log = require("temp-log");
 
 // Use the fastest possible means to execute a task in a future turn
@@ -21,7 +20,6 @@ var nextTick =(function () {
   var tail = head;
   var flushing = false;
   var requestTick = void 0;
-  var isNodeJS = false;
   // queue for late tasks, used by unhandled rejection tracking
   var laterQueue = [];
 
@@ -98,18 +96,7 @@ var nextTick =(function () {
     }
   };
 
-  if (typeof process === "object" &&
-    process.toString() === "[object process]" && process.nextTick) {
-    // Ensure Q is in a real Node environment, with a `process.nextTick`.
-    // To see through fake Node environments:
-    // * Mocha test runner - exposes a `process` global without a `nextTick`
-    // * Browserify - exposes a `process.nexTick` function that uses
-    //   `setTimeout`. In this case `setImmediate` is preferred because
-    //    it is faster. Browserify's `process.toString()` yields
-    //   "[object Object]", while in a real Node environment
-    //   `process.nextTick()` yields "[object process]".
-    isNodeJS = true;
-
+  if (isNodeJS) {
     requestTick = function () {
       process.nextTick(flush);
     };
