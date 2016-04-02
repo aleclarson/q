@@ -6,11 +6,7 @@
  *       performance impacts in large applications).
  */
 
-require("lotus-require");
-
-var parseErrorStack = require("parseErrorStack");
 var isNodeJS = require("isNodeJS");
-var log = require("temp-log");
 
 // Use the fastest possible means to execute a task in a future turn
 // of the event loop.
@@ -268,99 +264,12 @@ function Q(value) {
     promise = fulfill(value);
   }
 
-  return promise._createdWith("Q.resolve");
-}
-
-Q._resolve = _Q;
-function _Q(value, createdBy) {
-  var promise = Q(value);
-  if (!isPromise(value)) { promise._createdBy(createdBy); }
   return promise;
 }
 
-function _activate(promise, callback) {
-
-  if (!Q.debug) {
-    return callback();
-  }
-
-  if (Q.activePromise != null) {
-    Q.activePromises.push(Q.activePromise);
-  }
-
-  Q.activePromise = promise;
-
-  var result = callback();
-
-  Q.activePromise = Q.activePromises.pop();
-
-  return result;
-}
-
-function _init(promise, createdWith) {
-
-  if (!Q.debug) { return; }
-
-  promise.id = Q.id++;
-
-  Object.defineProperty(promise, "state", {
-    enumerable: true,
-    get: function () {
-      return this.inspect().state;
-    }
-  });
-
-  promise.createdWith = createdWith;
-
-  promise.createdBy = undefined;
-
-  promise.createdIn = Q.activePromise;
-
-  promise.previous = undefined;
-
-  promise.result = undefined;
-
-  promise.error = undefined;
-
-  promise.stack = parseErrorStack(Error());
-
-  if (Q.cache != null) {
-    Q.cache[promise.id] = promise;
-  }
-}
-
 function _reject(error, promise) {
-
-  if (!Q.debug) {
-    if (!error.promise) {
-      error.promise = promise;
-    }
-    return;
-  }
-
-  if (Q.verbose) {
-    log.moat(1);
-    log(promise.id + " caught a rejection!");
-    log.moat(1);
-  }
-
-  // Find the rejected Promise that was created internally.
-  while (promise.previous != null && promise.previous.isRejected()) {
-    promise = promise.previous;
-  }
-
-  // Find the rejected Promise that was created by the user.
-  while (promise.createdBy != null && promise.createdIn != null) {
-    promise = promise.createdIn;
-  }
-
-  if (promise.isRejected()) {
-
+  if (!error.promise) {
     error.promise = promise;
-
-    if (typeof Q.onRejection === "function") {
-      Q.onRejection(promise, error);
-    }
   }
 }
 
@@ -375,35 +284,6 @@ function _onUnhandledError(error) {
     }
   });
 }
-
-// Follows `promise.result` and returns the last value found. If no result exists, `promise` is returned.
-function _findResult(promise) {
-
-  var result = promise;
-
-  while (result.result != null) {
-    result = result.result;
-  }
-
-  return result;
-}
-
-Q.id = 1;
-
-if (typeof process !== "undefined") {
-  var parseBool = require("parse-bool");
-  Q.debug = parseBool(process.env.Q_DEBUG);
-  Q.verbose = parseBool(process.env.Q_VERBOSE);
-} else {
-  Q.debug = false;
-  Q.verbose = false;
-}
-
-// An ordered array of nested Promises that are currently active.
-Q.activePromises = [];
-
-// The promise whose handler we are inside of.
-Q.activePromise = undefined;
 
 /**
  * Performs a task in a future turn of the event loop.
@@ -434,9 +314,7 @@ function defer() {
   var deferred = object_create(defer.prototype);
   var promise = object_create(Promise.prototype);
 
-  _init(promise, "Q.defer");
-
-  promise.stack = parseErrorStack(Error());
+  promise.stack = [ '*  Q.defer  *', Error() ];
 
   promise.promiseDispatch = function (resolve, op, operands) {
     var args = array_slice(arguments);
@@ -462,12 +340,7 @@ function defer() {
     var nearerValue = nearer(resolvedPromise);
 
     if (isPromise(nearerValue)) {
-
       resolvedPromise = nearerValue; // shorten chain
-
-      if (Q.debug) {
-        promise.result = resolvedPromise;
-      }
     }
 
     return nearerValue;
@@ -488,21 +361,6 @@ function defer() {
 
     resolvedPromise = newPromise;
 
-    if (Q.debug) {
-
-      if (Q.verbose) {
-        log.moat(1);
-        log(promise.id + ".result = " + newPromise.id);
-        log.moat(1);
-      }
-
-      promise.result = newPromise;
-
-      if (Q.onBecome) {
-        Q.onBecome(newPromise, promise);
-      }
-    }
-
     array_reduce(messages, function (undefined, message) {
       Q.nextTick(function () {
         newPromise.promiseDispatch.apply(newPromise, message);
@@ -518,20 +376,20 @@ function defer() {
   deferred.resolve = function (value) {
     if (resolvedPromise) { return; }
     var newPromise = Q(value);
-    if (!isPromise(value)) { newPromise._createdBy("deferred.resolve"); }
+    if (!isPromise(value)) { newPromise; }
     become(newPromise);
   };
 
   deferred.fulfill = function (value) {
     if (resolvedPromise) { return; }
-    var newPromise = fulfill(value)._createdBy("deferred.fulfill");
+    var newPromise = fulfill(value);
     become(newPromise);
   };
 
   deferred.reject = function (error) {
     if (resolvedPromise) { return; }
     error.promise = promise;
-    var newPromise = reject(error)._createdBy("deferred.reject");
+    var newPromise = reject(error);
     become(newPromise);
   };
 
@@ -615,7 +473,7 @@ Promise.prototype.passByCopy = function () {
  *
  */
 Q.join = function (x, y) {
-  return _Q(x, "Q.join").join(y)._createdWith("Q.join");
+  return Q(x).join(y);
 };
 
 Promise.prototype.join = function (that) {
@@ -627,7 +485,7 @@ Promise.prototype.join = function (that) {
       throw Error("Can't join: not the same: " + x + " " + y);
     }
   };
-  return _Q([this, that], "promise.join").spread(spread)._createdWith("promise.join");
+  return _Q([this, that], "promise.join").spread(spread);
 };
 
 /**
@@ -683,7 +541,7 @@ function Promise(descriptor, fallback, inspect) {
 
   var promise = object_create(Promise.prototype);
 
-  _init(promise, "Q.makePromise");
+  promise.stack = [ '*  new Promise  *', Error() ];
 
   promise.promiseDispatch = function (resolve, op, args) {
     var result;
@@ -694,12 +552,6 @@ function Promise(descriptor, fallback, inspect) {
         result = fallback.call(promise, op, args);
       }
     } catch (error) {
-
-      if (Q.debug && Q.verbose) {
-        log.moat(1);
-        log('promiseDispatch failed!');
-        log.moat(1);
-      }
 
       if (resolve) {
         resolve(error);
@@ -735,9 +587,9 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
 
   deferred = defer();
 
-  var promise = deferred.promise._createdWith("promise.then");
+  var promise = deferred.promise;
 
-  promise.stack = parseErrorStack(Error());
+  promise.stack = [ '*  Promise::then  *', Error() ];
 
   if (typeof this.abort === 'function') {
     promise.abort = this.abort;
@@ -750,20 +602,10 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
 
   // Starts the next Promise(s).
   var resolve = function (error, result) {
-
-    if (Q.debug) {
-      promise.previous = _findResult(previous);
-    }
-
     if (error instanceof Error) {
       deferred.reject(error);
     } else {
       deferred.resolve(result);
-    }
-
-    // Ensure 'result.previous' is never the same as 'result.createdIn'.
-    if (Q.debug && isPromise(result) && result.previous != null && result.previous === result.createdIn) {
-      result.previous = undefined;
     }
   };
 
@@ -772,41 +614,25 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
     if (done) { return; }
     done = true;
 
-    // Mark this Promise as active.
-    _activate(promise, function () {
+    if (error instanceof Error) {
+      return resolve(error);
+    }
 
-      if (error instanceof Error) {
-        return resolve(error);
+    // Was a fulfillment handler passed?
+    if (fulfilled) {
+      try {
+        result = fulfilled(result);
       }
 
-      // Was a fulfillment handler passed?
-      if (fulfilled) {
-        try {
-          if (Q.debug && Q.verbose) {
-            log.moat(1);
-            log(promise.id + " is starting...");
-            log.moat(1);
-          }
+      catch (error) {
 
-          result = fulfilled(result);
-        }
+        resolve(error);
 
-        catch (error) {
-
-          if (Q.debug && Q.verbose) {
-            log.moat(1);
-            log('Fulfillment handler failed!');
-            log.moat(1);
-          }
-
-          resolve(error);
-
-          _reject(error, promise);
-        }
+        _reject(error, promise);
       }
+    }
 
-      resolve(null, result);
-    });
+    resolve(null, result);
   };
 
   // Called when any previous Promise is rejected and has not yet been handled.
@@ -814,44 +640,28 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
     if (done) { return; }
     done = true;
 
-    // Mark this Promise as active.
-    _activate(promise, function () {
+    // Was an error handler passed?
+    if (rejected) {
 
-      // Was an error handler passed?
-      if (rejected) {
+      try {
 
-        try {
-
-          if (Q.debug && Q.verbose) {
-            log.moat(1);
-            log(promise.id + " caught an error!");
-            log.moat(1);
-          }
-
-          // Attempt to handle the error.
-          resolve(null, rejected(error));
-        }
-
-        catch (error) {
-
-          if (Q.debug && Q.verbose) {
-            log.moat(1);
-            log('Rejection handler failed!');
-            log.moat(1);
-          }
-
-          // Pass the new `error` to the next Promise in the chain.
-          resolve(error);
-
-          _reject(error, promise);
-        }
+        // Attempt to handle the error.
+        resolve(null, rejected(error));
       }
 
-      else {
-        // Pass the `error` to the next Promise in the chain.
+      catch (error) {
+
+        // Pass the new `error` to the next Promise in the chain.
         resolve(error);
+
+        _reject(error, promise);
       }
-    });
+    }
+
+    else {
+      // Pass the `error` to the next Promise in the chain.
+      resolve(error);
+    }
   };
 
   // Called when the previous Promise progresses.
@@ -900,7 +710,7 @@ Promise.prototype.then = function (fulfilled, rejected, progressed) {
 };
 
 Q.tap = function (promise, callback) {
-  return Q(promise).tap(callback)._createdWith("Q.tap");
+  return Q(promise).tap(callback);
 };
 
 /**
@@ -923,7 +733,7 @@ Promise.prototype.tap = function (callback) {
     return callback.fcall(value).thenResolve(value);
   };
 
-  return this.then(didFulfill)._createdWith("promise.tap");
+  return this.then(didFulfill);
 };
 
 /**
@@ -944,23 +754,23 @@ Promise.prototype.tap = function (callback) {
  */
 Q.when = when;
 function when(value, fulfilled, rejected, progressed) {
-  return _Q(value, "Q.when").then(fulfilled, rejected, progressed)._createdWith("Q.when");
+  return Q(value).then(fulfilled, rejected, progressed);
 }
 
 Promise.prototype.thenResolve = function (value) {
-  return this.then(function () { return value; })._createdWith("promise.thenResolve");
+  return this.then(function () { return value; });
 };
 
 Q.thenResolve = function (promise, value) {
-  return _Q(promise, "Q.thenResolve").thenResolve(value)._createdWith("Q.thenResolve");
+  return Q(promise).thenResolve(value);
 };
 
 Promise.prototype.thenReject = function (reason) {
-  return this.then(function () { throw reason; })._createdWith("promise.thenReject");
+  return this.then(function () { throw reason; });
 };
 
 Q.thenReject = function (promise, reason) {
-  return _Q(promise, "Q.thenReject").thenReject(reason)._createdWith("Q.thenReject");
+  return Q(promise).thenReject(reason);
 };
 
 /**
@@ -1141,7 +951,7 @@ function reject(error) {
 
   trackRejection(promise, error); // Note that the error has not been handled.
 
-  return promise._createdWith("Q.reject");
+  return promise;
 }
 
 /**
@@ -1185,7 +995,7 @@ function fulfill(value) {
     }
   };
 
-  return Promise(descriptor, void 0, inspect)._createdWith("Q.fulfill");
+  return Promise(descriptor, void 0, inspect);
 }
 
 /**
@@ -1237,12 +1047,12 @@ function master(object) {
  */
 Q.spread = spread;
 function spread(value, fulfilled, rejected) {
-  return _Q(value, "Q.spread").spread(fulfilled, rejected)._createdWith("Q.spread");
+  return Q(value).spread(fulfilled, rejected);
 }
 
 Promise.prototype.spread = function (fulfilled, rejected) {
   var didFulfill = function (array) { return fulfilled.apply(void 0, array); };
-  return this.all().then(didFulfill, rejected)._createdWith("promise.spread");
+  return this.all().then(didFulfill, rejected);
 };
 
 /**
@@ -1278,7 +1088,7 @@ function promised(callback) {
  */
 Q.dispatch = dispatch;
 function dispatch(object, op, args) {
-  return _Q(object, "Q.dispatch").dispatch(op, args)._createdWith("Q.dispatch");
+  return Q(object).dispatch(op, args);
 }
 
 Promise.prototype.dispatch = function (op, args) {
@@ -1298,7 +1108,7 @@ Promise.prototype.dispatch = function (op, args) {
     self.promiseDispatch(resolve, op, args);
   });
 
-  return global.lastDispatched = deferred.promise._createdWith("promise.dispatch");
+  return deferred.promise;
 };
 
 /**
@@ -1394,11 +1204,11 @@ Promise.prototype.invoke = function (name /*...args*/) {
  * @param args      array of application arguments
  */
 Q.fapply = function (object, args) {
-  return _Q(object, "Q.fapply").dispatch("apply", [void 0, args])._createdWith("Q.fapply");
+  return Q(object).dispatch("apply", [void 0, args]);
 };
 
 Promise.prototype.fapply = function (args) {
-  return this.dispatch("apply", [void 0, args])._createdWith("promise.fapply");
+  return this.dispatch("apply", [void 0, args]);
 };
 
 /**
@@ -1408,11 +1218,11 @@ Promise.prototype.fapply = function (args) {
  */
 Q["try"] =
 Q.fcall = function (object /* ...args*/) {
-  return _Q(object, "Q.try").dispatch("apply", [void 0, array_slice(arguments, 1)])._createdWith("Q.try");
+  return Q(object).dispatch("apply", [void 0, array_slice(arguments, 1)]);
 };
 
 Promise.prototype.fcall = function (/*...args*/) {
-  return this.dispatch("apply", [void 0, array_slice(arguments)])._createdWith("promise.fcall");
+  return this.dispatch("apply", [void 0, array_slice(arguments)]);
 };
 
 /**
@@ -1449,11 +1259,11 @@ Promise.prototype.fbind = function (/*...args*/) {
  * @return promise for the keys of the eventually settled object
  */
 Q.keys = function (object) {
-  return _Q(object, "Q.keys").dispatch("keys", [])._createdWith("Q.keys");
+  return Q(object).dispatch("keys", []);
 };
 
 Promise.prototype.keys = function () {
-  return this.dispatch("keys", [])._createdWith("promise.keys");
+  return this.dispatch("keys", []);
 };
 
 /**
@@ -1492,7 +1302,7 @@ function all(promises) {
       deferred.notify({ index: index, value: progress });
     };
 
-    when(promise, fulfill, deferred.reject, notify)._createdBy("Q.all");
+    when(promise, fulfill, deferred.reject, notify);
   };
 
   array_reduce(promises, reduce, void 0);
@@ -1501,11 +1311,11 @@ function all(promises) {
     deferred.resolve(promises);
   }
 
-  return deferred.promise._createdWith("Q.all");
+  return deferred.promise;
 }
 
 Promise.prototype.all = function () {
-  return all(this)._createdWith("promise.all");
+  return all(this);
 };
 
 /**
@@ -1522,7 +1332,7 @@ function any(promises) {
   var promise;
 
   if (promises.length === 0) {
-    return Q.resolve()._createdWith("Q.any");
+    return Q.resolve();
   }
 
   var deferred = Q.defer();
@@ -1564,7 +1374,7 @@ function any(promises) {
 }
 
 Promise.prototype.any = function () {
-  return any(this)._createdWith("promise.any");
+  return any(this);
 };
 
 /**
@@ -1605,12 +1415,12 @@ Promise.prototype.allSettled = function () {
  */
 Q["catch"] =
 Q.fail = function (object, rejected) {
-  return _Q(object, "Q.fail").then(void 0, rejected)._createdWith("Q.fail");
+  return Q(object).then(void 0, rejected);
 };
 
 Promise.prototype["catch"] =
 Promise.prototype.fail = function (rejected) {
-  return this.then(void 0, rejected)._createdWith("promise.fail");
+  return this.then(void 0, rejected);
 };
 
 /**
@@ -1623,11 +1433,11 @@ Promise.prototype.fail = function (rejected) {
  */
 Q.progress = progress;
 function progress(object, progressed) {
-  return _Q(object, "Q.progress").then(void 0, void 0, progressed)._createdWith("Q.progress");
+  return Q(object).then(void 0, void 0, progressed);
 }
 
 Promise.prototype.progress = function (progressed) {
-  return this.then(void 0, void 0, progressed)._createdWith("promise.progress");
+  return this.then(void 0, void 0, progressed);
 };
 
 /**
@@ -1642,7 +1452,7 @@ Promise.prototype.progress = function (progressed) {
  * ``always`` is done.
  */
 Q.always = function (object, callback) {
-  return _Q(object, "Q.always")["always"](callback)._createdWith("Q.always");
+  return Q(object)["always"](callback);
 };
 
 Promise.prototype.always = function (callback) {
@@ -1662,7 +1472,7 @@ Promise.prototype.always = function (callback) {
     });
   };
 
-  return this.then(didFulfill, didReject)._createdWith("promise.always");
+  return this.then(didFulfill, didReject);
 };
 
 /**
@@ -1673,21 +1483,14 @@ Promise.prototype.always = function (callback) {
  */
 Q.done = function (promise, fulfilled, rejected, progressed, createdWith) {
 
-  promise = _Q(promise, "Q.done");
-
-  var newPromise;
+  promise = Q(promise);
 
   // Avoid unnecessary `nextTick`ing via an unnecessary `when`.
   if (fulfilled || rejected || progress) {
-    promise = promise.then(fulfilled, rejected, progress)._createdBy(createdWith);
+    promise = promise.then(fulfilled, rejected, progress);
   }
 
-  var onUnhandledError = function (error) {
-    if (Q.debug) { newPromise.previous = _findResult(promise); }
-    _onUnhandledError(error);
-  };
-
-  newPromise = promise.then(void 0, onUnhandledError)._createdWith(createdWith);
+  promise.then(void 0, _onUnhandledError);
 };
 
 Promise.prototype.done = function (fulfilled, rejected, progressed) {
@@ -1712,7 +1515,7 @@ Promise.prototype.finish = function (callback) {
  * fulfilled before the timeout, otherwise rejected.
  */
 Q.timeout = function (object, ms, error) {
-  return _Q(object, "Q.timeout").timeout(ms, error)._createdWith("Q.timeout");
+  return Q(object).timeout(ms, error);
 };
 
 Promise.prototype.timeout = function (ms, error) {
@@ -1735,7 +1538,7 @@ Promise.prototype.timeout = function (ms, error) {
     deferred.reject(error);
   }, deferred.notify);
 
-  return deferred.promise._createdWith("promise.timeout");
+  return deferred.promise;
 };
 
 /**
@@ -1752,7 +1555,7 @@ Q.delay = function (object, delay) {
     delay = object;
     object = void 0;
   }
-  return _Q(object, "Q.delay").delay(delay)._createdWith("Q.delay");
+  return Q(object).delay(delay);
 };
 
 Promise.prototype.delay = function (delay) {
@@ -1763,9 +1566,9 @@ Promise.prototype.delay = function (delay) {
 
     setTimeout(deferred.resolve.bind(null, value), delay);
 
-    return deferred.promise._createdBy("promise.delay");
+    return deferred.promise;
 
-  })._createdWith("promise.delay");
+  });
 };
 
 /**
@@ -1778,16 +1581,16 @@ Promise.prototype.delay = function (delay) {
  *
  */
 Q.nfapply = function (callback, args) {
-  return Q(callback).nfapply(args)._createdWith("Q.nfapply");
+  return Q(callback).nfapply(args);
 };
 
 Promise.prototype.nfapply = function (args) {
   var deferred = defer();
   var nodeArgs = array_slice(args);
   nodeArgs.push(deferred.makeNodeResolver());
-  var promise = this.fapply(nodeArgs)._createdBy("promise.nfapply");
-  promise.fail(deferred.reject)._createdBy("promise.nfapply");
-  return deferred.promise._createdWith("promise.nfapply");
+  var promise = this.fapply(nodeArgs);
+  promise.fail(deferred.reject);
+  return deferred.promise;
 };
 
 /**
@@ -1801,7 +1604,7 @@ Promise.prototype.nfapply = function (args) {
  */
 Q.nfcall = function (callback /*...args*/) {
   var args = array_slice(arguments, 1);
-  return Q(callback).nfapply(args)._createdWith("Q.nfcall");
+  return Q(callback).nfapply(args);
 };
 
 Promise.prototype.nfcall = function (/*...args*/) {
@@ -1809,7 +1612,7 @@ Promise.prototype.nfcall = function (/*...args*/) {
   var nodeArgs = array_slice(arguments);
   nodeArgs.push(deferred.makeNodeResolver());
   this.fapply(nodeArgs).fail(deferred.reject);
-  return deferred.promise._createdWith("promise.nfcall");
+  return deferred.promise;
 };
 
 /**
@@ -1828,7 +1631,7 @@ Q.denodeify = function (callback /*...args*/) {
     var deferred = defer();
     nodeArgs.push(deferred.makeNodeResolver());
     Q(callback).fapply(nodeArgs).fail(deferred.reject);
-    return deferred.promise._createdWith("Q.nfbind");
+    return deferred.promise;
   };
 };
 
@@ -1836,7 +1639,7 @@ Promise.prototype.nfbind =
 Promise.prototype.denodeify = function (/*...args*/) {
   var args = array_slice(arguments);
   args.unshift(this);
-  return Q.denodeify.apply(void 0, args)._createdWith("promise.nfbind");
+  return Q.denodeify.apply(void 0, args);
 };
 
 Q.nbind = function (callback, thisp /*...args*/) {
@@ -1849,14 +1652,14 @@ Q.nbind = function (callback, thisp /*...args*/) {
       return callback.apply(thisp, arguments);
     }
     Q(bound).fapply(nodeArgs).fail(deferred.reject);
-    return deferred.promise._createdWith("Q.nbind");
+    return deferred.promise;
   };
 };
 
 Promise.prototype.nbind = function (/*thisp, ...args*/) {
   var args = array_slice(arguments, 0);
   args.unshift(this);
-  return Q.nbind.apply(void 0, args)._createdWith("promise.nbind");
+  return Q.nbind.apply(void 0, args);
 };
 
 /**
@@ -1870,7 +1673,7 @@ Promise.prototype.nbind = function (/*thisp, ...args*/) {
  */
 Q.nmapply = // XXX As proposed by "Redsandro"
 Q.npost = function (object, name, args) {
-  return Q(object).npost(name, args)._createdWith("Q.npost");
+  return Q(object).npost(name, args);
 };
 
 Promise.prototype.nmapply = // XXX As proposed by "Redsandro"
@@ -1879,7 +1682,7 @@ Promise.prototype.npost = function (name, args) {
   var nodeArgs = array_slice(args || []);
   nodeArgs.push(deferred.makeNodeResolver());
   this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
-  return deferred.promise._createdWith("promise.npost");
+  return deferred.promise;
 };
 
 /**
@@ -1899,7 +1702,7 @@ Q.ninvoke = function (object, name /*...args*/) {
   var deferred = defer();
   nodeArgs.push(deferred.makeNodeResolver());
   Q(object).dispatch("post", [name, nodeArgs]).fail(deferred.reject);
-  return deferred.promise._createdWith("Q.ninvoke");
+  return deferred.promise;
 };
 
 Promise.prototype.nsend = // XXX Based on Mark Miller's proposed "send"
@@ -1909,7 +1712,7 @@ Promise.prototype.ninvoke = function (name /*...args*/) {
   var nodeArgs = array_slice(arguments, 1);
   nodeArgs.push(deferred.makeNodeResolver());
   this.dispatch("post", [name, nodeArgs]).fail(deferred.reject);
-  return deferred.promise._createdWith("promise.ninvoke");
+  return deferred.promise;
 };
 
 /**
@@ -1924,7 +1727,7 @@ Promise.prototype.ninvoke = function (name /*...args*/) {
  */
 Q.nodeify = nodeify;
 function nodeify(value, nodeback) {
-  return _Q(value, "Q.nodeify").nodeify(nodeback)._createdWith("Q.nodeify");
+  return Q(value).nodeify(nodeback);
 }
 
 Promise.prototype.nodeify = function (nodeback) {
@@ -1943,27 +1746,10 @@ Promise.prototype.nodeify = function (nodeback) {
       });
     };
 
-    return this.then(didFulfill, didReject)._createdWith("promise.nodeify");
+    return this.then(didFulfill, didReject);
   }
 
   return this;
 };
-
-Object.defineProperties(Promise.prototype, {
-
-  "_createdWith": {
-    value: function (createdWith) {
-      if (Q.debug && this.createdBy != createdWith) { this.createdWith = createdWith; }
-      return this;
-    }
-  },
-
-  "_createdBy": {
-    value: function (createdBy) {
-      if (Q.debug && this.createdWith != createdBy) { this.createdBy = createdBy; }
-      return this;
-    }
-  }
-});
 
 module.exports = Q;
