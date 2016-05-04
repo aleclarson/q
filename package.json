@@ -35,10 +35,6 @@
     "url": "git://github.com/aleclarson/q.git"
   },
   "dependencies": {
-    "isNodeJS": "aleclarson/isNodeJS#1.0.0",
-    "lotus-require": "aleclarson/lotus-require#1.0.0",
-    "parse-bool": "aleclarson/parse-bool#0.0.1",
-    "parseErrorStack": "aleclarson/parseErrorStack#1.0.0",
-    "temp-log": "aleclarson/temp-log#1.0.0"
+    "isNodeJS": "aleclarson/isNodeJS#1.0.0"
   }
 }

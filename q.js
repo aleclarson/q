@@ -1,12 +1,5 @@
-/**
- * @providesModule q
- *
- * TODO: Add 'promise.debug' so we can selectively debug promises,
- *       rather than every promise made in the program (which has severe
- *       performance impacts in large applications).
- */
 
-var isNodeJS = require("isNodeJS");
+require("isNodeJS");
 
 // Use the fastest possible means to execute a task in a future turn
 // of the event loop.
