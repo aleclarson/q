@@ -1,5 +1,8 @@
 
-require("isNodeJS");
+require('isDev')
+require('isNodeJS');
+
+var Tracer = require('tracer');
 
 // Use the fastest possible means to execute a task in a future turn
 // of the event loop.
@@ -307,7 +310,7 @@ function defer() {
   var deferred = object_create(defer.prototype);
   var promise = object_create(Promise.prototype);
 
-  promise.stack = [ '*  Q.defer  *', Error() ];
+  promise.tracer = Tracer('Q.defer()');
 
   promise.promiseDispatch = function (resolve, op, operands) {
     var args = array_slice(arguments);
@@ -805,11 +808,11 @@ function isPromiseAlike(object) {
  */
 Q.isPending = isPending;
 function isPending(object) {
-  return isPromise(object) && object.state === "pending";
+  return isPromise(object) && object.isPending();
 }
 
 Promise.prototype.isPending = function () {
-  return this.state === "pending";
+  return this.inspect().state === "pending";
 };
 
 /**
@@ -818,11 +821,11 @@ Promise.prototype.isPending = function () {
  */
 Q.isFulfilled = isFulfilled;
 function isFulfilled(object) {
-  return !isPromise(object) || object.state === "fulfilled";
+  return isPromise(object) && object.isFulfilled();
 }
 
 Promise.prototype.isFulfilled = function () {
-  return this.state === "fulfilled";
+  return this.inspect().state === "fulfilled";
 };
 
 /**
@@ -830,11 +833,11 @@ Promise.prototype.isFulfilled = function () {
  */
 Q.isRejected = isRejected;
 function isRejected(object) {
-  return isPromise(object) && object.state === "rejected";
+  return !isPromise(object) || object.isRejected();
 }
 
 Promise.prototype.isRejected = function () {
-  return this.state === "rejected";
+  return this.inspect().state === "rejected";
 };
 
 //// BEGIN UNHANDLED REJECTION TRACKING
@@ -1270,6 +1273,10 @@ Promise.prototype.keys = function () {
 // http://wiki.ecmascript.org/doku.php?id=strawman:concurrency&rev=1308776521#allfulfilled
 Q.all = all;
 function all(promises) {
+
+  if (isDev && !Array.isArray(promises)) {
+    throw TypeError('\'Q.all\' expects an Array!');
+  }
 
   var deferred = defer();
 
