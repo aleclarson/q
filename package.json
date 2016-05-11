@@ -1,8 +1,9 @@
 {
   "name": "q",
   "version": "1.0.0",
-  "main": "src/q",
   "dependencies": {
-    "isNodeJS": "aleclarson/isNodeJS#1.0.0"
+    "isNodeJS": "aleclarson/isNodeJS#1.0.0",
+    "isDev": "aleclarson/isDev#1.0.0",
+    "tracer": "aleclarson/tracer#1.0.0"
   }
 }
